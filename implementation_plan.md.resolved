@@ -1,0 +1,39 @@
+# Goal Description
+Build a simple, single-user browser automation tool for collecting Afaan Oromoo text data from Facebook posts and comments. The system allows users to paste a Facebook post URL, automatically scrapes the content using Playwright, stores it in MongoDB, and provides a modern web interface to view, edit, filter, and export the data.
+
+## Proposed Changes
+
+We will use a modern stack:
+- **Backend:** FastAPI (Python), Playwright (for scraping), Motor (async MongoDB client).
+- **Frontend:** React (TypeScript, Vite), TailwindCSS, React Router, Axios.
+- **Database:** MongoDB.
+- **Infrastructure:** Docker and Docker Compose for easy execution.
+
+### Infrastructure & Configuration
+- Create `docker-compose.yml` defining three services: `frontend`, `backend`, and `mongodb`.
+
+### Backend (FastAPI)
+- `backend/app/main.py`: Entry point for FastAPI application.
+- `backend/app/api/`: API router for posts, scraping, and stats.
+- `backend/app/scraper/`: Playwright logic to handle Facebook authentication/cookie popups, load posts, scroll through comments, and extract data.
+- `backend/app/models/`: Pydantic models for data validation and MongoDB schemas.
+- `backend/app/database.py`: MongoDB connection using Motor.
+- `backend/requirements.txt`: Python dependencies (fastapi, uvicorn, motor, playwright, pandas for export, etc.).
+- `backend/Dockerfile`: Docker image setup, including installing browser binaries for Playwright.
+
+### Frontend (React + Vite)
+- `frontend/src/`: Core React application.
+- `frontend/src/pages/Home.tsx`: URL input and scrape initiation.
+- `frontend/src/pages/Dashboard.tsx`: Stats cards, table with pagination, and date filtering.
+- `frontend/src/pages/PostDetails.tsx`: View and edit specific posts and comments.
+- `frontend/src/components/`: Reusable UI components (Navbar, Buttons, Inputs, Loaders, Toasts).
+- `frontend/src/services/api.ts`: API client to communicate with the FastAPI backend.
+- `frontend/tailwind.config.js`: Tailwind configuration for modern, minimal styling.
+- `frontend/Dockerfile`: Multi-stage build for React frontend (or running dev server).
+
+## Verification Plan
+### Automated & Manual Verification
+- **Run the full stack via Docker Compose:** Ensure services communicate correctly.
+- **Scraping test:** Provide a public Facebook Afaan Oromoo post URL and verify the backend asynchronously scrapes and stores data.
+- **UI testing:** Test the Home page (error states, loading), Dashboard (stats accuracy, filtering by date), and Post Details (edit/delete functionality).
+- **Export testing:** Download CSV, JSON, and JSONL formats and verify they only include the filtered data and match the required structure.
