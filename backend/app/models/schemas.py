@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from datetime import datetime
+from pydantic import BaseModel, Field, HttpUrl
+from datetime import datetime, timezone
 from typing import List, Optional
 
 class CommentSchema(BaseModel):
@@ -11,10 +11,17 @@ class PostSchema(BaseModel):
     post_text: str
     post_date: Optional[str] = None
     comments: List[CommentSchema] = []
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Using timezone-aware UTC for modern Python standards
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    class Config:
+        # This allows the model to work seamlessly if you switch to an ORM later
+        from_attributes = True
 
 class ScrapeRequest(BaseModel):
-    url: str
+    # Validates that the input is a real URL
+    url: HttpUrl
+    post_id: Optional[str] = None
 
 class FilterRequest(BaseModel):
     start_date: Optional[str] = None

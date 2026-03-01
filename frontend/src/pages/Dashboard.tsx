@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { getStats, getPosts, deletePost, downloadExport } from '../services/api';
 
@@ -13,12 +12,17 @@ export default function Dashboard() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
-    const fetchData = async () => {
+    // Wrapped in useCallback so it can be called safely from useEffect and handlers
+    const fetchData = useCallback(async (start?: string, end?: string) => {
         setLoading(true);
         try {
+            // Use passed parameters or fallback to state
+            const s = start !== undefined ? start : startDate;
+            const e = end !== undefined ? end : endDate;
+
             const [{ data: statsData }, { data: postsData }] = await Promise.all([
                 getStats(),
-                getPosts(startDate, endDate)
+                getPosts(s, e)
             ]);
             setStats(statsData);
             setPosts(postsData);
@@ -27,15 +31,22 @@ export default function Dashboard() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [startDate, endDate]);
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, []); // Runs once on mount
 
     const handleFilter = (e: React.FormEvent) => {
         e.preventDefault();
         fetchData();
+    };
+
+    const handleClearFilters = () => {
+        setStartDate('');
+        setEndDate('');
+        // Immediately fetch with empty strings to bypass state delay
+        fetchData('', '');
     };
 
     const handleExport = async (format: string) => {
@@ -52,7 +63,7 @@ export default function Dashboard() {
         try {
             await deletePost(postId);
             toast.success('Post deleted');
-            fetchData(); // refresh list
+            fetchData(); 
         } catch (error) {
             toast.error('Failed to delete post');
         }
@@ -70,13 +81,13 @@ export default function Dashboard() {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
-                    { label: 'Total Posts', value: stats.total_posts, color: 'bg-blue-50 text-blue-700' },
-                    { label: 'Total Comments', value: stats.total_comments, color: 'bg-green-50 text-green-700' },
-                    { label: 'Total Tokens', value: stats.total_tokens, color: 'bg-purple-50 text-purple-700' }
+                    { label: 'Total Posts', value: stats.total_posts, color: 'text-blue-700', bg: 'bg-blue-50' },
+                    { label: 'Total Comments', value: stats.total_comments, color: 'text-green-700', bg: 'bg-green-50' },
+                    { label: 'Total Tokens', value: stats.total_tokens, color: 'text-purple-700', bg: 'bg-purple-50' }
                 ].map((stat, i) => (
-                    <div key={i} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col">
+                    <div key={i} className={`bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col`}>
                         <span className="text-gray-500 font-medium text-sm">{stat.label}</span>
-                        <span className={`text-3xl font-bold mt-2 ${stat.color.split(' ')[1]}`}>
+                        <span className={`text-3xl font-bold mt-2 ${stat.color}`}>
                             {stat.value.toLocaleString()}
                         </span>
                     </div>
@@ -84,7 +95,7 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                {/* Filters and Export Sidebar */}
+                {/* Sidebar */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                         <h3 className="font-semibold text-gray-900 mb-4">Filter by Date</h3>
@@ -116,7 +127,7 @@ export default function Dashboard() {
                             {(startDate || endDate) && (
                                 <button
                                     type="button"
-                                    onClick={() => { setStartDate(''); setEndDate(''); setTimeout(fetchData, 10); }}
+                                    onClick={handleClearFilters}
                                     className="w-full text-gray-600 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-100 transition-colors"
                                 >
                                     Clear Filters
@@ -138,15 +149,14 @@ export default function Dashboard() {
                                 Export to JSONL <span>↓</span>
                             </button>
                         </div>
-                        <p className="text-xs text-gray-500 mt-3">*Exports respect current date filters.</p>
                     </div>
                 </div>
 
-                {/* Data Table */}
+                {/* Table */}
                 <div className="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
                         <h3 className="font-semibold text-gray-900">Scraped Posts</h3>
-                        <button onClick={fetchData} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        <button onClick={() => fetchData()} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
                             Refresh
                         </button>
                     </div>
@@ -155,10 +165,10 @@ export default function Dashboard() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Preview</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comments</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preview</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comments</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-100">
@@ -168,11 +178,11 @@ export default function Dashboard() {
                                     </tr>
                                 ) : posts.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-6 py-12 text-center text-gray-500">No data found. Try scraping a post!</td>
+                                        <td colSpan={4} className="px-6 py-12 text-center text-gray-500">No data found.</td>
                                     </tr>
                                 ) : (
                                     posts.map((post) => (
-                                        <tr key={post.post_id} className="hover:bg-gray-50 transition-colors">
+                                        <tr key={post.post_id || post._id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                                 {post.post_date || 'N/A'}
                                             </td>

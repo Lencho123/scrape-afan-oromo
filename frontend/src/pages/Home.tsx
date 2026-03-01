@@ -9,23 +9,26 @@ export default function Home() {
     const navigate = useNavigate();
 
     const handleScrape = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!url.includes('facebook.com')) {
-            toast.error('Please enter a valid Facebook URL.');
-            return;
-        }
+    e.preventDefault();
+    const cleanUrl = url.trim();
 
-        setIsScraping(true);
-        try {
-            await triggerScrape(url);
-            toast.success('Scraping started! Check the dashboard soon.');
-            navigate('/dashboard');
-        } catch (error: any) {
-            toast.error('Failed to start scraping: ' + (error.response?.data?.detail || error.message));
-        } finally {
-            setIsScraping(false);
-        }
-    };
+    if (!cleanUrl.includes('facebook.com')) {
+        toast.error('Enter a valid Facebook URL');
+        return;
+    }
+
+    setIsScraping(true);
+    try {
+        // Passing the URL inside the expected object structure
+        await triggerScrape(cleanUrl); 
+        toast.success('Scraping session queued!');
+        navigate('/dashboard');
+    } catch (error: any) {
+        toast.error('Error: ' + error.response?.data?.detail || 'Server unreachable');
+    } finally {
+        setIsScraping(false);
+    }
+};
 
     return (
         <div className="flex items-center justify-center min-h-[80vh]">

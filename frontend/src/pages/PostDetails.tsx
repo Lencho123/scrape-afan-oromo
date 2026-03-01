@@ -14,12 +14,14 @@ export default function PostDetails() {
 
     useEffect(() => {
         const fetchPost = async () => {
+            if (!id) return;
             try {
-                const { data } = await getPost(id!);
+                const { data } = await getPost(id);
                 setPost(data);
-                setEditForm(JSON.parse(JSON.stringify(data))); // deep copy
+                // Fix: Initialize editForm with a fresh copy of data
+                setEditForm(JSON.parse(JSON.stringify(data)));
             } catch (error) {
-                toast.error('Failed to load post details');
+                toast.error('Post not found');
                 navigate('/dashboard');
             } finally {
                 setLoading(false);
@@ -30,12 +32,13 @@ export default function PostDetails() {
 
     const handleSave = async () => {
         try {
+            // Ensure we send the data back in the format the PostSchema expects
             await updatePost(id!, editForm);
             setPost(editForm);
             setIsEditing(false);
-            toast.success('Post updated safely');
+            toast.success('Saved successfully');
         } catch (error) {
-            toast.error('Failed to update post');
+            toast.error('Update failed');
         }
     };
 
@@ -56,30 +59,50 @@ export default function PostDetails() {
         setEditForm({ ...editForm, comments: newComments });
     };
 
+    const handleCancel = () => {
+    // Revert the form data back to the saved post data
+    setEditForm(JSON.parse(JSON.stringify(post)));
+    setIsEditing(false);
+};
+
     if (loading) return <div className="py-20 text-center">Loading details...</div>;
     if (!post) return <div className="py-20 text-center text-red-500">Post not found.</div>;
 
     return (
         <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
             {/* Header Actions */}
-            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-900 font-medium text-sm flex items-center">
-                    ← Back
+            {/* Header Actions */}
+<div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+    <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-900 font-medium text-sm flex items-center">
+        ← Back
+    </button>
+    <div className="space-x-3">
+        {isEditing ? (
+            <div className="flex space-x-2">
+                {/* UPDATED BUTTON HERE */}
+                <button 
+                    onClick={handleCancel} 
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                >
+                    Cancel
                 </button>
-                <div className="space-x-3">
-                    {isEditing ? (
-                        <div className="flex space-x-2">
-                            <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg">Cancel</button>
-                            <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg">Save Changes</button>
-                        </div>
-                    ) : (
-                        <div className="flex space-x-2">
-                            <button onClick={() => setIsEditing(true)} className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg">Edit Mode</button>
-                            <button onClick={handleDelete} className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg">Delete</button>
-                        </div>
-                    )}
+                    
+                    <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg">
+                        Save Changes
+                    </button>
                 </div>
-            </div>
+            ) : (
+                <div className="flex space-x-2">
+                    <button onClick={() => setIsEditing(true)} className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg">
+                        Edit Mode
+                    </button>
+                    <button onClick={handleDelete} className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg">
+                        Delete
+                    </button>
+                </div>
+            )}
+        </div>
+</div>
 
             {/* Main Post Section */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">

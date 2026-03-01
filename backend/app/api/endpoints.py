@@ -1,9 +1,13 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from app.models.schemas import ScrapeRequest, PostSchema, FilterRequest, StatisticsResponse
 from app.database import posts_collection
-from app.scraper.scraper import scrape_facebook_post
+from app.scraper import scrape_facebook_post
 import uuid
 import datetime
+import pandas as pd
+from fastapi.responses import Response, JSONResponse
+import json
+
 
 router = APIRouter()
 
@@ -71,48 +75,44 @@ async def get_statistics():
     
     pipeline = [
         {"$project": {
-            "num_comments": {"$size": "$comments"},
-            "post_tokens": {"$size": {"$split": ["$post_text", " "]}},
+            "num_comments": {"$size": {"$ifNull": ["$comments", []]}},
+            # Use $ifNull to prevent split errors on empty posts
+            "post_tokens": {
+                "$size": {"$split": [{"$ifNull": ["$post_text", ""]}, " "]}
+            },
             "comments_tokens": {
                 "$reduce": {
-                    "input": "$comments",
+                    "input": {"$ifNull": ["$comments", []]},
                     "initialValue": 0,
-                    "in": {"$add": ["$$value", {"$size": {"$split": ["$$this.text", " "]}}]}
+                    "in": {"$add": [
+                        "$$value", 
+                        {"$size": {"$split": [{"$ifNull": ["$$this.text", ""]}, " "]}}
+                    ]}
                 }
             }
         }},
         {"$group": {
             "_id": None,
             "total_comments": {"$sum": "$num_comments"},
-            "total_post_tokens": {"$sum": "$post_tokens"},
-            "total_comments_tokens": {"$sum": "$comments_tokens"}
+            "total_tokens": {"$sum": {"$add": ["$post_tokens", "$comments_tokens"]}}
         }}
     ]
     
     result = await posts_collection.aggregate(pipeline).to_list(length=1)
     
-    if result:
-        total_comments = result[0].get("total_comments", 0)
-        total_tokens = result[0].get("total_post_tokens", 0) + result[0].get("total_comments_tokens", 0)
-    else:
-        total_comments = 0
-        total_tokens = 0
-        
+    stats = result[0] if result else {}
     return StatisticsResponse(
         total_posts=total_posts,
-        total_comments=total_comments,
-        total_tokens=total_tokens
+        total_comments=stats.get("total_comments", 0),
+        total_tokens=stats.get("total_tokens", 0)
     )
 
-import pandas as pd
-from fastapi.responses import Response, JSONResponse
-import json
 
 @router.get("/export")
 async def export_data(
-    format: str = Query("csv", description="Export format: csv, json, or jsonl"),
-    start_date: str = Query(None, description="Start date in YYYY-MM-DD format"),
-    end_date: str = Query(None, description="End date in YYYY-MM-DD format"),
+    format: str = Query("json", regex="^(csv|json|jsonl)$"),
+    start_date: str = None,
+    end_date: str = None,
 ):
     query = {}
     if start_date or end_date:
@@ -123,8 +123,9 @@ async def export_data(
             query["post_date"]["$lte"] = end_date
 
     cursor = posts_collection.find(query)
-    posts = await cursor.to_list(length=None)
-    
+    posts = await cursor.to_list(length=1000)
+    if not posts:
+        return JSONResponse(content={"message": "No data found for the selected range"}, status_code=404)
     # Flatten data for CSV and JSONL
     flattened_data = []
     for post in posts:
@@ -146,17 +147,39 @@ async def export_data(
 
     if format == "csv":
         df = pd.DataFrame(flattened_data)
+        # Use a buffer so you don't save a file to disk on the server
         csv_data = df.to_csv(index=False)
-        return Response(content=csv_data, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=export.csv"})
-        
+        return Response(
+            content=csv_data, 
+            media_type="text/csv", 
+            headers={"Content-Disposition": f"attachment; filename=fb_export_{datetime.date.today()}.csv"}
+        )
     elif format == "json":
+    # Clean the data for JSON serialization
         for post in posts:
             post["_id"] = str(post["_id"])
-        return JSONResponse(content=posts, headers={"Content-Disposition": "attachment; filename=export.json"})
-        
+            # Ensure datetime objects (like created_at) are converted to strings
+            if isinstance(post.get("created_at"), datetime.datetime):
+                post["created_at"] = post["created_at"].isoformat()
+
+        return JSONResponse(
+            content=posts, 
+            headers={"Content-Disposition": "attachment; filename=facebook_data.json"}
+        )
     elif format == "jsonl":
-        jsonl_data = "\n".join([json.dumps(record, default=str) for record in flattened_data])
-        return Response(content=jsonl_data, media_type="application/x-ndjson", headers={"Content-Disposition": "attachment; filename=export.jsonl"})
+    # Use the flattened_data list you created earlier
+    # This ensures each line is a single record
+        lines = []
+        for record in flattened_data:
+            # json.dumps with default=str handles UUIDs and datetimes automatically
+            lines.append(json.dumps(record, default=str))
         
+        jsonl_content = "\n".join(lines)
+        
+        return Response(
+            content=jsonl_content,
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": "attachment; filename=facebook_data.jsonl"}
+        )
     else:
         raise HTTPException(status_code=400, detail="Invalid format. Supported formats are csv, json, jsonl.")

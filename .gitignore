@@ -1,1 +1,13 @@
 node_modules
+# Virtual environment
+backend/venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VSCode
+.vscode/
+
+# Environment
+.env
