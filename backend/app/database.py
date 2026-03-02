@@ -5,7 +5,7 @@ MONGO_URL ="mongodb+srv://wako:scraper@cluster0scrpa.bvybm2w.mongodb.net/?appNam
 
 # 1. Async Client (For FastAPI routes/frontend)
 client = AsyncIOMotorClient(MONGO_URL)
-database = client["facebook_scraper"]
+database= client["facebook_scraper"]
 posts_collection = database.get_collection("posts")
 
 # ADD THIS for your Scraper

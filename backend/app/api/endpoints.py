@@ -1,3 +1,4 @@
+import io
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from app.models.schemas import ScrapeRequest, PostSchema, FilterRequest, StatisticsResponse
 from app.database import posts_collection
@@ -129,57 +130,51 @@ async def export_data(
     # Flatten data for CSV and JSONL
     flattened_data = []
     for post in posts:
-        base_record = {
+        base = {
             "post_id": post.get("post_id"),
+            "post_url": post.get("url"),
             "post_text": post.get("post_text"),
             "post_date": post.get("post_date")
         }
         comments = post.get("comments", [])
         if not comments:
-            flattened_data.append({**base_record, "comment_text": "", "comment_date": ""})
+            flattened_data.append({**base, "comment_author": "", "comment_text": "", "comment_date": ""})
         else:
-            for comment in comments:
+            for c in comments:
                 flattened_data.append({
-                    **base_record,
-                    "comment_text": comment.get("text", ""),
-                    "comment_date": comment.get("date", "")
+                    **base,
+                    "comment_author": c.get("author", "Unknown"),
+                    "comment_text": c.get("text", ""),
+                    "comment_date": c.get("date", "")
                 })
+                
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
+    # --- FORMAT 2: CSV (Data Science Standard) ---
     if format == "csv":
         df = pd.DataFrame(flattened_data)
-        # Use a buffer so you don't save a file to disk on the server
-        csv_data = df.to_csv(index=False)
+        stream = io.StringIO()
+        df.to_csv(stream, index=False, encoding='utf-8-sig') # utf-8-sig for Excel compatibility
         return Response(
-            content=csv_data, 
-            media_type="text/csv", 
-            headers={"Content-Disposition": f"attachment; filename=fb_export_{datetime.date.today()}.csv"}
+            content=stream.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=fb_export_{timestamp}.csv"}
         )
-    elif format == "json":
-    # Clean the data for JSON serialization
-        for post in posts:
-            post["_id"] = str(post["_id"])
-            # Ensure datetime objects (like created_at) are converted to strings
-            if isinstance(post.get("created_at"), datetime.datetime):
-                post["created_at"] = post["created_at"].isoformat()
-
-        return JSONResponse(
-            content=posts, 
-            headers={"Content-Disposition": "attachment; filename=facebook_data.json"}
-        )
-    elif format == "jsonl":
-    # Use the flattened_data list you created earlier
-    # This ensures each line is a single record
-        lines = []
-        for record in flattened_data:
-            # json.dumps with default=str handles UUIDs and datetimes automatically
-            lines.append(json.dumps(record, default=str))
-        
-        jsonl_content = "\n".join(lines)
-        
+    
+    # --- FORMAT 3: JSONL (Large Dataset/BigQuery Standard) ---
+    if format == "jsonl":
+        # Standard JSONL: Each line is a standalone JSON object
+        jsonl_lines = [json.dumps(record, default=str) for record in flattened_data]
+        jsonl_content = "\n".join(jsonl_lines)
         return Response(
             content=jsonl_content,
             media_type="application/x-ndjson",
-            headers={"Content-Disposition": "attachment; filename=facebook_data.jsonl"}
+            headers={"Content-Disposition": f"attachment; filename=fb_data_{timestamp}.jsonl"}
+            )
+    if format == "json":
+        for post in posts:
+            post["_id"] = str(post["_id"]) # Standardize MongoDB IDs
+        return JSONResponse(
+            content=posts,
+            headers={"Content-Disposition": f"attachment; filename=fb_data_{timestamp}.json"}
         )
-    else:
-        raise HTTPException(status_code=400, detail="Invalid format. Supported formats are csv, json, jsonl.")

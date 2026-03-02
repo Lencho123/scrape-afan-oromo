@@ -11,3 +11,6 @@ __pycache__/
 
 # Environment
 .env
+backend/app/lid.176.bin
+*.bin
+*.jsonl

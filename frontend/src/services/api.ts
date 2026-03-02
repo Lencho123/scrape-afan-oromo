@@ -31,29 +31,43 @@ export const downloadExport = async (format: string, startDate?: string, endDate
     try {
         const response = await api.get('/export', {
             params,
-            responseType: 'blob', // Required for file downloads
+            responseType: 'blob', 
         });
 
-        // Create the file blob
-        const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+        // Determine the correct MIME type
+        const mimeTypes: Record<string, string> = {
+            csv: 'text/csv;charset=utf-8',
+            json: 'application/json',
+            jsonl: 'application/x-ndjson',
+        };
+
+        // Standard Handling for CSV encoding (Excel Fix)
+        let blobData = [response.data];
+        if (format === 'csv') {
+            // Prepend UTF-8 BOM so Excel recognizes the Oromo characters
+            blobData = ["\ufeff", response.data];
+        }
+
+        const blob = new Blob(blobData, { type: mimeTypes[format] || 'application/octet-stream' });
+        const blobUrl = window.URL.createObjectURL(blob);
+        
         const link = document.createElement('a');
         link.href = blobUrl;
 
-        const extension = format === 'jsonl' ? 'jsonl' : format;
-        const fileName = `facebook_data_${new Date().toISOString().split('T')[0]}.${extension}`;
+        // Standardized naming convention
+        const dateStr = new Date().toISOString().split('T')[0];
+        const fileName = `fb_export_${dateStr}.${format === 'jsonl' ? 'jsonl' : format}`;
         
         link.setAttribute('download', fileName);
         document.body.appendChild(link);
         link.click();
 
-        // CLEANUP: 
-        // 1. Remove the element from DOM
-        link.parentNode?.removeChild(link);
-        // 2. Free up memory by revoking the blob URL
+        // Standard Cleanup
+        document.body.removeChild(link);
         window.URL.revokeObjectURL(blobUrl); 
         
     } catch (error) {
         console.error("Export failed:", error);
-        throw error; // Re-throw so the UI can show a toast error
+        throw error;
     }
 };
