@@ -242,4 +242,4 @@ def scrape_facebook_post(url: str, post_id: str):
             if browser:
                 browser.close()
                 logger.info("🔒 Browser session ended.")
-                
+               
