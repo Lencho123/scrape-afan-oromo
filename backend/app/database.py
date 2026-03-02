@@ -1,7 +1,17 @@
 # app/database.py
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import MongoClient 
-MONGO_URL ="mongodb+srv://wako:scraper@cluster0scrpa.bvybm2w.mongodb.net/?appName=Cluster0Scrpa"
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+MONGO_URL = os.getenv("MONGO_URL")
+
+if not MONGO_URL:
+    raise ValueError("MONGO_URL is not set in the environment variables")
+
 
 # 1. Async Client (For FastAPI routes/frontend)
 client = AsyncIOMotorClient(MONGO_URL)

@@ -12,20 +12,38 @@ import json
 
 router = APIRouter()
 
+@router.post("/scrape")
+async def trigger_scrape(request: ScrapeRequest, background_tasks: BackgroundTasks):
+    try:
+        # Create a unique ID for the post
+        post_id = str(uuid.uuid4())
+        # initiate background scraping
+        background_tasks.add_task(scrape_facebook_post, request.url, post_id)
+        return {"message": "Scraping started", "post_id": post_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/posts")
-async def get_posts(skip: int = 0, limit: int = 20):
-    cursor = posts_collection.find().skip(skip).limit(limit)
+async def get_posts(
+    start_date: str = Query(None, description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(None, description="End date in YYYY-MM-DD format"),
+    skip: int = 0,
+    limit: int = 20
+):
+    query = {}
+    if start_date or end_date:
+        query["post_date"] = {}
+        if start_date:
+            query["post_date"]["$gte"] = start_date
+        if end_date:
+            query["post_date"]["$lte"] = end_date
+
+    cursor = posts_collection.find(query).skip(skip).limit(limit)
     posts = await cursor.to_list(length=limit)
-    
-    # Format the data to your specific requirements
-    formatted_posts = []
-    for p in posts:
-        formatted_posts.append({
-            "post_id": p.get("post_id"),
-            "post": p.get("post_text"),
-            "comments": p.get("comments", []) # List of strings
-        })
-    return formatted_posts
+    # Convert ObjectIds to strings
+    for post in posts:
+        post["_id"] = str(post["_id"])
+    return posts
 
 @router.get("/posts/{post_id}")
 async def get_post(post_id: str):
@@ -100,55 +118,63 @@ async def export_data(
     query = {}
     if start_date or end_date:
         query["post_date"] = {}
-        if start_date: query["post_date"]["$gte"] = start_date
-        if end_date: query["post_date"]["$lte"] = end_date
+        if start_date:
+            query["post_date"]["$gte"] = start_date
+        if end_date:
+            query["post_date"]["$lte"] = end_date
 
     cursor = posts_collection.find(query)
     posts = await cursor.to_list(length=1000)
-
     if not posts:
-        raise HTTPException(status_code=404, detail="No data found")
-
-    # Transform into your requested form
-    simplified_data = []
-    for p in posts:
-        simplified_data.append({
-            "post_id": p.get("post_id"),
-            "post": p.get("post_text"),
-            "comments": p.get("comments", []) # ["comment1", "comment2"]
-        })
-
+        return JSONResponse(content={"message": "No data found for the selected range"}, status_code=404)
+    # Flatten data for CSV and JSONL
+    flattened_data = []
+    for post in posts:
+        base = {
+            "post_id": post.get("post_id"),
+            "post_url": post.get("url"),
+            "post_text": post.get("post_text"),
+            "post_date": post.get("post_date")
+        }
+        comments = post.get("comments", [])
+        if not comments:
+            flattened_data.append({**base, "comment_author": "", "comment_text": "", "comment_date": ""})
+        else:
+            for c in comments:
+                flattened_data.append({
+                    **base,
+                    "comment_author": c.get("author", "Unknown"),
+                    "comment_text": c.get("text", ""),
+                    "comment_date": c.get("date", "")
+                })
+                
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
-    if format == "json":
-        return JSONResponse(
-            content=simplified_data,
-            headers={"Content-Disposition": f"attachment; filename=fb_export_{timestamp}.json"}
-        )
-
-    if format == "jsonl":
-        # Each line is one post object with its array of comments
-        jsonl_content = "\n".join([json.dumps(r, ensure_ascii=False) for r in simplified_data])
-        return Response(
-            content=jsonl_content,
-            media_type="application/x-ndjson",
-            headers={"Content-Disposition": f"attachment; filename=fb_export_{timestamp}.jsonl"}
-        )
-
+    # --- FORMAT 2: CSV (Data Science Standard) ---
     if format == "csv":
-        # For CSV, we join comments with a newline or pipe because CSVs are flat
-        csv_data = []
-        for item in simplified_data:
-            csv_data.append({
-                "post_id": item["post_id"],
-                "post": item["post"],
-                "comments": "\n".join(item["comments"]) # Newline inside the cell
-            })
-        df = pd.DataFrame(csv_data)
+        df = pd.DataFrame(flattened_data)
         stream = io.StringIO()
-        df.to_csv(stream, index=False, encoding='utf-8-sig')
+        df.to_csv(stream, index=False, encoding='utf-8-sig') # utf-8-sig for Excel compatibility
         return Response(
             content=stream.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename=fb_export_{timestamp}.csv"}
+        )
+    
+    # --- FORMAT 3: JSONL (Large Dataset/BigQuery Standard) ---
+    if format == "jsonl":
+        # Standard JSONL: Each line is a standalone JSON object
+        jsonl_lines = [json.dumps(record, default=str) for record in flattened_data]
+        jsonl_content = "\n".join(jsonl_lines)
+        return Response(
+            content=jsonl_content,
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f"attachment; filename=fb_data_{timestamp}.jsonl"}
+            )
+    if format == "json":
+        for post in posts:
+            post["_id"] = str(post["_id"]) # Standardize MongoDB IDs
+        return JSONResponse(
+            content=posts,
+            headers={"Content-Disposition": f"attachment; filename=fb_data_{timestamp}.json"}
         )
