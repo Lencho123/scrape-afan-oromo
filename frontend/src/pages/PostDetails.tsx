@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { getPost, updatePost, deletePost } from '../services/api';
+import { getPost, updatePost } from '../services/api';
 
 export default function PostDetails() {
     const { id } = useParams<{ id: string }>();
@@ -11,6 +11,7 @@ export default function PostDetails() {
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [editForm, setEditForm] = useState<any>(null);
+    const [selectedIndexes, setSelectedIndexes] = useState<number[]>([]);
 
     useEffect(() => {
         const fetchPost = async () => {
@@ -18,7 +19,6 @@ export default function PostDetails() {
             try {
                 const { data } = await getPost(id);
                 setPost(data);
-                // Fix: Initialize editForm with a fresh copy of data
                 setEditForm(JSON.parse(JSON.stringify(data)));
             } catch (error) {
                 toast.error('Post not found');
@@ -30,27 +30,50 @@ export default function PostDetails() {
         fetchPost();
     }, [id, navigate]);
 
+    // --- BULK SELECTION LOGIC ---
+    const toggleSelect = (index: number) => {
+        setSelectedIndexes(prev => 
+            prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+        );
+    };
+
+    const handleSelectAll = () => {
+        if (selectedIndexes.length === editForm.comments.length) {
+            setSelectedIndexes([]);
+        } else {
+            setSelectedIndexes(editForm.comments.map((_: any, i: number) => i));
+        }
+    };
+
+    const handleBulkDelete = () => {
+        if (!window.confirm(`Delete ${selectedIndexes.length} selected comments?`)) return;
+        const newComments = editForm.comments.filter((_: any, i: number) => !selectedIndexes.includes(i));
+        setEditForm({ ...editForm, comments: newComments });
+        setSelectedIndexes([]);
+        toast.success('Comments removed from local view');
+    };
+
     const handleSave = async () => {
         try {
-            // Ensure we send the data back in the format the PostSchema expects
             await updatePost(id!, editForm);
             setPost(editForm);
             setIsEditing(false);
-            toast.success('Saved successfully');
+            setSelectedIndexes([]);
+            toast.success('Changes saved to database');
         } catch (error) {
             toast.error('Update failed');
         }
     };
 
-    const handleDelete = async () => {
-        if (!window.confirm('Permanent delete. Are you sure?')) return;
-        try {
-            await deletePost(id!);
-            toast.success('Post deleted');
-            navigate('/dashboard');
-        } catch (error) {
-            toast.error('Failed to delete post');
-        }
+    const handleCancel = () => {
+        setEditForm(JSON.parse(JSON.stringify(post)));
+        setIsEditing(false);
+        setSelectedIndexes([]);
+    };
+
+    const removeComment = (index: number) => {
+        const newComments = editForm.comments.filter((_: any, i: number) => i !== index);
+        setEditForm({ ...editForm, comments: newComments });
     };
 
     const handleCommentChange = (index: number, val: string) => {
@@ -59,103 +82,104 @@ export default function PostDetails() {
         setEditForm({ ...editForm, comments: newComments });
     };
 
-    const handleCancel = () => {
-    // Revert the form data back to the saved post data
-    setEditForm(JSON.parse(JSON.stringify(post)));
-    setIsEditing(false);
-};
-
     if (loading) return <div className="py-20 text-center">Loading details...</div>;
     if (!post) return <div className="py-20 text-center text-red-500">Post not found.</div>;
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
-            {/* Header Actions */}
-            {/* Header Actions */}
-<div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-    <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-900 font-medium text-sm flex items-center">
-        ← Back
-    </button>
-    <div className="space-x-3">
-        {isEditing ? (
-            <div className="flex space-x-2">
-                {/* UPDATED BUTTON HERE */}
-                <button 
-                    onClick={handleCancel} 
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
-                >
-                    Cancel
+        <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12 px-4">
+            
+            {/* STICKY ACTION BAR */}
+            <div className="sticky top-4 z-50 flex justify-between items-center bg-white/90 backdrop-blur border border-gray-200 p-4 rounded-2xl shadow-lg">
+                <button onClick={() => navigate('/dashboard')} className="text-gray-500 hover:text-gray-800 text-sm font-medium">
+                    ← Back
                 </button>
-                    
-                    <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg">
-                        Save Changes
-                    </button>
+                
+                <div className="flex gap-2">
+                    {isEditing ? (
+                        <>
+                            {selectedIndexes.length > 0 && (
+                                <button onClick={handleBulkDelete} className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg shadow-sm">
+                                    Delete Selected ({selectedIndexes.length})
+                                </button>
+                            )}
+                            <button onClick={handleCancel} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg">
+                                Cancel
+                            </button>
+                            <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700">
+                                Save changes
+                            </button>
+                        </>
+                    ) : (
+                        <button onClick={() => setIsEditing(true)} className="px-6 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700">
+                            Edit & Clean Data
+                        </button>
+                    )}
                 </div>
-            ) : (
-                <div className="flex space-x-2">
-                    <button onClick={() => setIsEditing(true)} className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg">
-                        Edit Mode
-                    </button>
-                    <button onClick={handleDelete} className="px-4 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg">
-                        Delete
-                    </button>
-                </div>
-            )}
-        </div>
-</div>
+            </div>
 
-            {/* Main Post Section */}
+            {/* MAIN POST */}
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <div className="flex justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Main Post Content</h2>
-                    <span className="text-sm text-gray-500 px-3 py-1 bg-gray-100 rounded-full">{post.post_date}</span>
-                </div>
-
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Original Post</h3>
                 {isEditing ? (
                     <textarea
                         value={editForm.post_text}
                         onChange={(e) => setEditForm({ ...editForm, post_text: e.target.value })}
-                        rows={5}
-                        className="w-full p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-y"
+                        rows={4}
+                        className="w-full p-4 border border-blue-100 bg-blue-50/30 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
                 ) : (
-                    <p className="whitespace-pre-wrap text-gray-700 leading-relaxed font-medium bg-gray-50 p-6 rounded-xl border border-gray-100">
-                        {post.post_text}
-                    </p>
+                    <p className="text-gray-800 leading-relaxed font-medium">{post.post_text}</p>
                 )}
             </div>
 
-            {/* Comments Section */}
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center">
-                    Comments
-                    <span className="ml-3 bg-blue-100 text-blue-800 text-xs py-1 px-2.5 rounded-full">{post.comments.length}</span>
-                </h2>
+            {/* COMMENTS SECTION */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <h2 className="font-bold text-gray-900">
+                        Comments ({isEditing ? editForm.comments.length : post.comments.length})
+                    </h2>
+                    {isEditing && (
+                        <button onClick={handleSelectAll} className="text-sm font-semibold text-blue-600 hover:underline">
+                            {selectedIndexes.length === editForm.comments.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                    )}
+                </div>
 
-                <div className="space-y-4">
-                    {post.comments.length === 0 ? (
-                        <p className="text-center text-gray-500 py-6 bg-gray-50 rounded-lg">No comments extracted for this post.</p>
-                    ) : (
-                        (isEditing ? editForm.comments : post.comments).map((comment: any, idx: number) => (
-                            <div key={idx} className="flex flex-col sm:flex-row gap-4 p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
-                                <div className="sm:w-32 flex-shrink-0">
-                                    <span className="text-xs font-medium text-gray-500">{comment.date || 'Unknown date'}</span>
-                                </div>
-                                <div className="flex-1">
-                                    {isEditing ? (
+                <div className="divide-y divide-gray-100">
+                    {(isEditing ? editForm.comments : post.comments).map((comment: any, idx: number) => (
+                        <div key={idx} className={`p-4 flex gap-4 transition-colors ${selectedIndexes.includes(idx) ? 'bg-red-50' : 'hover:bg-gray-50/50'}`}>
+                            {isEditing && (
+                                <input 
+                                    type="checkbox"
+                                    checked={selectedIndexes.includes(idx)}
+                                    onChange={() => toggleSelect(idx)}
+                                    className="mt-1 h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                />
+                            )}
+                            
+                            <div className="flex-1">
+                                {isEditing ? (
+                                    <div className="relative group">
                                         <textarea
                                             value={comment.text}
                                             onChange={(e) => handleCommentChange(idx, e.target.value)}
                                             rows={2}
-                                            className="w-full p-2.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full p-3 text-sm border border-gray-200 rounded-xl focus:bg-white bg-gray-50/50 outline-none"
                                         />
-                                    ) : (
-                                        <p className="text-gray-700 text-sm">{comment.text}</p>
-                                    )}
-                                </div>
+                                        <button 
+                                            onClick={() => removeComment(idx)}
+                                            className="absolute -top-2 -right-2 bg-white text-gray-400 hover:text-red-500 rounded-full shadow-sm border border-gray-100 p-1"
+                                        >
+                                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/></svg>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-700 text-sm leading-relaxed">{comment.text}</p>
+                                )}
+                                <p className="text-[10px] text-gray-400 mt-2 font-mono uppercase">{comment.date || 'No Date'}</p>
                             </div>
-                        ))
-                    )}
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
