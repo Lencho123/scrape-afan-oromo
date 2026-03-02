@@ -15,12 +15,27 @@ logger = logging.getLogger(__name__)
 def clean_text(text: str) -> str:
     if not text:
         return ""
-    # 1. Remove the '#' character
-    text = text.replace('#', '')
     
+    # 1. Remove HTML tags
+    text = re.sub(r'<[^>]*>', '', text)
+    
+    # 2. Remove Emails
+    text = re.sub(r'\S+@\S+\.\S+', '', text)
+    
+    # 3. Remove Phone Numbers (Ethiopian and International formats)
+    text = re.sub(r'\+?\d{1,4}?[-.\s]?\(?\d{1,3}?\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,9}', '', text)
+    
+    # 4. Remove Mentions/IDs (@username)
+    text = re.sub(r'@\w+', '', text)
+    
+    # 5. Remove URLS
     url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+|www\.(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     text = re.sub(url_pattern, '', text)
-    # 2. Collapse multiple whitespaces/newlines into a single space
+    
+    # 6. Remove '#' character
+    text = text.replace('#', '')
+    
+    # 7. Collapse multiple whitespaces/newlines into a single space
     cleaned = re.sub(r'\s+', ' ', text).strip()
     return cleaned
 
@@ -29,6 +44,32 @@ def contains_amharic(text: str) -> bool:
     # Ethiopic Unicode Range: \u1200-\u137F
     amharic_pattern = re.compile(r'[\u1200-\u137F]')
     return bool(amharic_pattern.search(text))
+
+def is_valid_content(text: str) -> bool:
+    """Universal validator for both posts and comments."""
+    if not text:
+        return False
+    
+    word_count = len(text.split())
+    
+    # Must be at least 2 words
+    if word_count < 2:
+        return False
+    
+    # Must not be just numbers
+    if text.isdigit():
+        return False
+    
+    # Must not contain Amharic (Ethiopic) script
+    if contains_amharic(text):
+        return False
+    
+    # Filter out common UI noise
+    ui_noise = ["Like", "Reply", "Share", "See more", "Write a comment..."]
+    if text in ui_noise:
+        return False
+        
+    return True
 # --- 2. COOKIE HELPER (FIXES THE CRASH) ---
 def sanitize_cookies(cookies_list):
     valid_samesite = ["Strict", "Lax", "None"]
@@ -126,6 +167,11 @@ def scrape_facebook_post(url: str, post_id: str):
             raw_post_text = page.locator(msg_selector).first.inner_text().strip() if page.locator(msg_selector).count() > 0 else ""
             post_text = clean_text(raw_post_text)
 
+        
+            if not is_valid_content(post_text):
+                post_text = ""
+                
+                
             comments_data = []
             seen_hashes = set()
 
