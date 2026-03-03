@@ -127,32 +127,22 @@ async def export_data(
     posts = await cursor.to_list(length=1000)
     if not posts:
         return JSONResponse(content={"message": "No data found for the selected range"}, status_code=404)
-    # Flatten data for CSV and JSONL
-    flattened_data = []
-    for post in posts:
-        base = {
-            "post_id": post.get("post_id"),
-            "post_url": post.get("url"),
-            "post_text": post.get("post_text"),
-            "post_date": post.get("post_date")
-        }
-        comments = post.get("comments", [])
-        if not comments:
-            flattened_data.append({**base, "comment_author": "", "comment_text": "", "comment_date": ""})
-        else:
-            for c in comments:
-                flattened_data.append({
-                    **base,
-                    "comment_author": c.get("author", "Unknown"),
-                    "comment_text": c.get("text", ""),
-                    "comment_date": c.get("date", "")
-                })
-                
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
     # --- FORMAT 2: CSV (Data Science Standard) ---
     if format == "csv":
-        df = pd.DataFrame(flattened_data)
+        csv_data = []
+        for post in posts:
+            csv_row = {
+                "post_id": post.get("post_id"),
+                "post_url": post.get("url"),
+                "post_text": post.get("post_text"),
+                "post_date": post.get("post_date"),
+                "comments": json.dumps(post.get("comments", []), default=str)
+            }
+            csv_data.append(csv_row)
+            
+        df = pd.DataFrame(csv_data)
         stream = io.StringIO()
         df.to_csv(stream, index=False, encoding='utf-8-sig') # utf-8-sig for Excel compatibility
         return Response(
@@ -164,7 +154,7 @@ async def export_data(
     # --- FORMAT 3: JSONL (Large Dataset/BigQuery Standard) ---
     if format == "jsonl":
         # Standard JSONL: Each line is a standalone JSON object
-        jsonl_lines = [json.dumps(record, default=str) for record in flattened_data]
+        jsonl_lines = [json.dumps(post, default=str) for post in posts]
         jsonl_content = "\n".join(jsonl_lines)
         return Response(
             content=jsonl_content,
