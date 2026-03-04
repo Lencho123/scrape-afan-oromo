@@ -32,7 +32,7 @@ async def trigger_scrape(request: ScrapeRequest, background_tasks: BackgroundTas
 
         # Create a unique ID for the post
         post_id = str(uuid.uuid4())
-        
+        print("Just to see in backend/api/endpoints.py is working!")
         # Add to tracking set
         active_scrapes.add(url_str)
         
