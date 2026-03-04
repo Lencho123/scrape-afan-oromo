@@ -12,15 +12,42 @@ import json
 
 router = APIRouter()
 
+# In-memory tracking for active scrapes
+active_scrapes = set()
+
 @router.post("/scrape")
 async def trigger_scrape(request: ScrapeRequest, background_tasks: BackgroundTasks):
+    url_str = str(request.url)
     try:
+        if url_str in active_scrapes:
+            return {"message": "URL is currently being scraped", "post_id": None}
+
+        # Check if the URL has already been scraped
+        existing_post = await posts_collection.find_one({"url": url_str})
+        if existing_post:
+            return {
+                "message": "URL has already been scraped",
+                "post_id": existing_post.get("post_id")
+            }
+
         # Create a unique ID for the post
         post_id = str(uuid.uuid4())
+        
+        # Add to tracking set
+        active_scrapes.add(url_str)
+        
+        # Wrapper function to remove from tracking set when done
+        def background_scrape_wrapper(u, pid):
+            try:
+                scrape_facebook_post(u, pid)
+            finally:
+                active_scrapes.discard(u)
+
         # initiate background scraping
-        background_tasks.add_task(scrape_facebook_post, request.url, post_id)
+        background_tasks.add_task(background_scrape_wrapper, url_str, post_id)
         return {"message": "Scraping started", "post_id": post_id}
     except Exception as e:
+        active_scrapes.discard(url_str) # Cleanup on error before background task starts
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/posts")
