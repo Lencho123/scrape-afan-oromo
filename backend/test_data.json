@@ -1,0 +1,30 @@
+[
+    {
+        "post_id": "test_1",
+        "url": "https://facebook.com/123",
+        "post_text": "Afaan Oromoo waan bareedaa dha. https://google.com 😊 wow!!!",
+        "post_date": "2024-03-04",
+        "comments": [
+            {
+                "text": "Bayyee gaarii dha",
+                "date": "2024-03-04"
+            },
+            {
+                "text": "This is entirely English but it should pass the basic check actually",
+                "date": "2024-03-04"
+            },
+            {
+                "text": "አማርኛ ጽሑፍ ይህ መወገድ አለበት",
+                "date": "2024-03-04"
+            },
+            {
+                "text": "Too short",
+                "date": "2024-03-04"
+            },
+            {
+                "text": "short",
+                "date": "2024-03-04"
+            }
+        ]
+    }
+]

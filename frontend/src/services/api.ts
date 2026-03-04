@@ -11,7 +11,7 @@ export const getPosts = (startDate?: string, endDate?: string, skip = 0, limit =
     const params: any = { skip, limit };
     if (startDate) params.start_date = startDate;
     if (endDate) params.end_date = endDate;
-    
+
     return api.get('/posts', { params });
 };
 
@@ -31,7 +31,7 @@ export const downloadExport = async (format: string, startDate?: string, endDate
     try {
         const response = await api.get('/export', {
             params,
-            responseType: 'blob', 
+            responseType: 'blob',
         });
 
         // Determine the correct MIME type
@@ -50,24 +50,37 @@ export const downloadExport = async (format: string, startDate?: string, endDate
 
         const blob = new Blob(blobData, { type: mimeTypes[format] || 'application/octet-stream' });
         const blobUrl = window.URL.createObjectURL(blob);
-        
+
         const link = document.createElement('a');
         link.href = blobUrl;
 
         // Standardized naming convention
         const dateStr = new Date().toISOString().split('T')[0];
         const fileName = `fb_export_${dateStr}.${format === 'jsonl' ? 'jsonl' : format}`;
-        
+
         link.setAttribute('download', fileName);
         document.body.appendChild(link);
         link.click();
 
         // Standard Cleanup
         document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl); 
-        
+        window.URL.revokeObjectURL(blobUrl);
+
     } catch (error) {
         console.error("Export failed:", error);
         throw error;
     }
+};
+
+export const uploadForCleaning = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post('/clean-data', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+
+    return response.data;
 };

@@ -37,3 +37,54 @@ We will use a modern stack:
 - **Scraping test:** Provide a public Facebook Afaan Oromoo post URL and verify the backend asynchronously scrapes and stores data.
 - **UI testing:** Test the Home page (error states, loading), Dashboard (stats accuracy, filtering by date), and Post Details (edit/delete functionality).
 - **Export testing:** Download CSV, JSON, and JSONL formats and verify they only include the filtered data and match the required structure.
+
+
+# Implementation Plan: Clean Data Feature
+
+The goal is to provide a dedicated, independent data cleaning micro-pipeline that does not modify the main database.
+
+## Proposed Changes
+
+### Backend Components
+
+#### [NEW] `backend/app/cleaner.py`
+This module will host pure functions for the data cleaning pipeline.
+Rules implemented:
+1. Minimum two words check.
+2. Contains at least one Afaan Oromoo word heuristic.
+3. Removes URLs.
+4. Preserves only `.,'!?` punctuation, removes extra spaces and consecutive repeating punctuation (`wow!!!` -> `wow!`).
+5. Removes Emojis.
+
+#### [MODIFY] [backend/app/api/endpoints.py](file:///home/len/projects/scrape-afan-oromo/backend/app/api/endpoints.py)
+Add a new route `POST /api/clean-data` using FastAPI's `UploadFile`.
+- Detects format from extension/MIME (`.csv`, `.json`, `.jsonl`).
+- Parses data into standard representation.
+- Runs data through `cleaner.py` functions, recording counts of original records, remaining records, removed posts, and removed comments.
+- Returns standard JSON payload containing `stats` and the `cleaned_data` tree.
+
+### Frontend Components
+
+#### [NEW] `frontend/src/pages/CleanData.tsx`
+A new page adhering to the Tailwind-based UI of the main app.
+Features:
+- File upload drag-and-drop or select button for JSON, JSONL, and CSV.
+- "Clean Data" trigger button + loading spinner.
+- Summary section displaying the returned statistics.
+- Export buttons (CSV, JSON, JSONL) that take the returned `cleaned_data` JSON from memory and trigger a browser download action.
+
+#### [NEW] `frontend/src/utils/exportUtils.ts`
+Utility functions enabling the frontend to stringify JSON into JSON, JSONL, or CSV and trigger a download link without needing to call the backend.
+
+#### [MODIFY] [frontend/src/App.tsx](file:///home/len/projects/scrape-afan-oromo/frontend/src/App.tsx) & Navigation
+Add a React Router Route `/clean-data` and link to it in the Navbar.
+
+## Verification Plan
+
+### Automated Tests
+- Test endpoints with varying datasets directly.
+
+### Manual Verification
+- Upload sample CSV, JSON, and JSONL.
+- Validate the text cleaning rules handled URLs, punctuation, and emojis.
+- Export the outputs and verify structural integrity in CSV and JSON formats.
