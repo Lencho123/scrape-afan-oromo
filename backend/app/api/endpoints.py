@@ -1,8 +1,9 @@
 import io
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, UploadFile, File
 from app.models.schemas import ScrapeRequest, PostSchema, FilterRequest, StatisticsResponse
 from app.database import posts_collection
 from app.scraper import scrape_facebook_post
+from app.cleaner import process_data
 import uuid
 import datetime
 import pandas as pd
@@ -32,7 +33,7 @@ async def trigger_scrape(request: ScrapeRequest, background_tasks: BackgroundTas
 
         # Create a unique ID for the post
         post_id = str(uuid.uuid4())
-        
+        print("Just to see in backend/api/endpoints.py is working!")
         # Add to tracking set
         active_scrapes.add(url_str)
         
@@ -191,7 +192,53 @@ async def export_data(
     if format == "json":
         for post in posts:
             post["_id"] = str(post["_id"]) # Standardize MongoDB IDs
-        return JSONResponse(
-            content=posts,
-            headers={"Content-Disposition": f"attachment; filename=fb_data_{timestamp}.json"}
-        )
+@router.post("/clean-data")
+async def upload_and_clean(file: UploadFile = File(...)):
+    """
+    Accepts a JSON, JSONL, or CSV file containing raw posts and comments.
+    Parses it, runs the specialized text cleaner, and returns the stats + the cleaned payload.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file uploaded")
+        
+    ext = file.filename.split('.')[-1].lower()
+    
+    if ext not in ['json', 'jsonl', 'csv']:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+        
+    content = await file.read()
+    
+    try:
+        data = []
+        if ext == 'json':
+            data = json.loads(content.decode('utf-8'))
+            if not isinstance(data, list):
+                # Perhaps it's a single post dict. Wrap it.
+                if isinstance(data, dict):
+                    data = [data]
+                else:
+                    raise ValueError("JSON must contain a list of posts or a single post object.")
+                    
+        elif ext == 'jsonl':
+            lines = content.decode('utf-8').strip().split('\n')
+            data = [json.loads(line) for line in lines if line.strip()]
+            
+        elif ext == 'csv':
+            # Use pandas to read CSV exactly how we exported it
+            df = pd.read_csv(io.BytesIO(content))
+            # Convert NaN to None for JSON serialization compatibility later
+            df = df.where(pd.notnull(df), None)
+            data = df.to_dict('records')
+            
+        # Run it through the processor pipeline
+        # (This will modify comments strings back into arrays if they were JSON stringified by CSV)
+        result = process_data(data)
+        
+        return JSONResponse(content=result)
+        
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON format: {str(e)}")
+    except pd.errors.EmptyDataError:
+        raise HTTPException(status_code=400, detail="The uploaded CSV file is empty.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Data processing error: {str(e)}")

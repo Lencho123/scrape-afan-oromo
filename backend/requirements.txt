@@ -6,3 +6,4 @@ pydantic
 pydantic-settings
 pandas
 python-multipart
+emoji
