@@ -7,3 +7,6 @@ pydantic-settings
 pandas
 python-multipart
 emoji
+starlettenltk
+
+nltk==3.9.3
