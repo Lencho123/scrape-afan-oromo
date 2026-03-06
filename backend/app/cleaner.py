@@ -82,6 +82,7 @@ def process_data(data: list) -> dict:
     }
     
     cleaned_data = []
+    seen_texts = set()
 
     for post in data:
         if not isinstance(post, dict):
@@ -94,21 +95,24 @@ def process_data(data: list) -> dict:
 
         cleaned_post_text = clean_text_rule(original_post_text)
         
-        # A post without text shouldn't necessarily be dropped according to earlier rules,
-        # but the specific prompt says: "If a post ends up with zero valid comments, 
-        # the post should still remain unless its own text fails validation."
-        # This means if the post text fails validation, we drop the post entirely.
+        # Drop the entire post if post_text fails validation
         if original_post_text and not cleaned_post_text:
              stats["removed_posts"] += 1
              stats["removed_comments"] += len(post.get("comments", []))
-             continue # Drop the entire post
+             continue 
              
-        # If it was originally empty but had comments, we keep it as empty? 
-        # We will assume every post MUST have valid post_text to survive based on rule 1.
         if not cleaned_post_text:
              stats["removed_posts"] += 1
              stats["removed_comments"] += len(post.get("comments", []))
              continue
+
+        # Prevent duplicate posts with exactly the same cleaned text
+        if cleaned_post_text in seen_texts:
+            stats["removed_posts"] += 1
+            stats["removed_comments"] += len(post.get("comments", []))
+            continue
+            
+        seen_texts.add(cleaned_post_text)
              
         new_post = post.copy()
         new_post["post_text"] = cleaned_post_text

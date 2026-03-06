@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "starlette": "^1.0.7"
+  }
+}
