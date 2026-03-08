@@ -38,6 +38,10 @@ def clean_text_rule(text: str) -> str:
     # Output Requirements: normalize spaces & trim
     text = re.sub(r'\s+', ' ', text).strip()
 
+    # Remove "\" and "/" fromt text
+    text = text.replace('/', ' ')
+    text = text.replace('\"', ' ')
+
     # Apply validations that can reject the whole string
     
     # Rule 1: Minimum Word Requirement (at least 2 words)
@@ -114,8 +118,12 @@ def process_data(data: list) -> dict:
             
         seen_texts.add(cleaned_post_text)
              
-        new_post = post.copy()
-        new_post["post_text"] = cleaned_post_text
+        new_post = {
+            "post_id": post["post_id"],
+            "post_text": cleaned_post_text,
+            "comments": []
+        }
+        
         stats["final_tokens"] += len(cleaned_post_text.split())
         
         # Process Comments
@@ -131,6 +139,8 @@ def process_data(data: list) -> dict:
 
         cleaned_comments = []
         for comment in original_comments:
+            cleaned_cmt_text = ""
+
             if isinstance(comment, dict):
                 original_cmt_text = comment.get("text", "")
                 if original_cmt_text and isinstance(original_cmt_text, str):
@@ -141,20 +151,21 @@ def process_data(data: list) -> dict:
                 if not cleaned_cmt_text:
                     stats["removed_comments"] += 1
                 else:
-                    new_cmt = comment.copy()
-                    new_cmt["text"] = cleaned_cmt_text
-                    cleaned_comments.append(new_cmt)
                     stats["final_tokens"] += len(cleaned_cmt_text.split())
+
             elif isinstance(comment, str):
                 stats["original_tokens"] += len(comment.split())
                 cleaned_cmt_text = clean_text_rule(comment)
                 if not cleaned_cmt_text:
                     stats["removed_comments"] += 1
                 else:
-                    cleaned_comments.append(cleaned_cmt_text)
                     stats["final_tokens"] += len(cleaned_cmt_text.split())
+            
+            if cleaned_cmt_text:
+                cleaned_comments.append(cleaned_cmt_text)
 
-        new_post["comments"] = cleaned_comments
+        
+        new_post["comments"] = cleaned_comments[:]
         cleaned_data.append(new_post)
         
         stats["final_posts"] += 1
