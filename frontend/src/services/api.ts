@@ -1,10 +1,25 @@
 import axios from 'axios';
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
 const api = axios.create({
-    baseURL: 'http://localhost:8000/api',
+    baseURL: BASE_URL,
+});
+
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('admin_token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
 });
 
 export const triggerScrape = (url: string) => api.post('/scrape', { url });
+
+export const verifyPassword = async (password: string) => {
+    const response = await api.post('/auth/verify', { password });
+    return response.data;
+};
 
 export const getPosts = (startDate?: string, endDate?: string, skip = 0, limit = 20) => {
     // Clean params: only include them if they have a value

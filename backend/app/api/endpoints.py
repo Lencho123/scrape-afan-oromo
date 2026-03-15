@@ -152,7 +152,7 @@ async def export_data(
             query["post_date"]["$lte"] = end_date
 
     cursor = posts_collection.find(query)
-    posts = await cursor.to_list(length=1000)
+    posts = await cursor.to_list(length=5000)
     if not posts:
         return JSONResponse(content={"message": "No data found for the selected range"}, status_code=404)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")

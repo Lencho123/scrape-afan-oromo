@@ -63,7 +63,7 @@ export default function Dashboard() {
         try {
             await deletePost(postId);
             toast.success('Post deleted');
-            fetchData(); 
+            fetchData();
         } catch (error) {
             toast.error('Failed to delete post');
         }
@@ -88,7 +88,7 @@ export default function Dashboard() {
                     <div key={i} className={`bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col`}>
                         <span className="text-gray-500 font-medium text-sm">{stat.label}</span>
                         <span className={`text-3xl font-bold mt-2 ${stat.color}`}>
-                            {stat.value.toLocaleString()}
+                            {(stat.value || 0).toLocaleString()}
                         </span>
                     </div>
                 ))}

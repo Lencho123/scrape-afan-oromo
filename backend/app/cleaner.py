@@ -1,6 +1,8 @@
 import re
 import emoji
 
+from app.clean_english import english_ratio
+
 def clean_text_rule(text: str) -> str:
     """
     Applies the specified cleaning rules to a given text (post or comment).
@@ -98,6 +100,9 @@ def process_data(data: list) -> dict:
             stats["original_tokens"] += len(original_post_text.split())
 
         cleaned_post_text = clean_text_rule(original_post_text)
+        # REMOVE POST TEXT WITH BUNCH OF ENGLISH WORDS
+        if english_ratio(cleaned_post_text) > 0.5:
+            cleaned_post_text = ""
         
         # Drop the entire post if post_text fails validation
         if original_post_text and not cleaned_post_text:
@@ -160,8 +165,9 @@ def process_data(data: list) -> dict:
                     stats["removed_comments"] += 1
                 else:
                     stats["final_tokens"] += len(cleaned_cmt_text.split())
-            
-            if cleaned_cmt_text:
+
+            # Remove comment with bunch of ENGLISH WORDS
+            if cleaned_cmt_text and english_ratio(cleaned_cmt_text) <= 0.5:
                 cleaned_comments.append(cleaned_cmt_text)
 
         
