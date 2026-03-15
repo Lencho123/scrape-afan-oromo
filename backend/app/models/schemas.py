@@ -31,3 +31,9 @@ class StatisticsResponse(BaseModel):
     total_posts: int
     total_comments: int
     total_tokens: int
+
+class AdminLoginRequest(BaseModel):
+    password: str
+
+class AdminLoginResponse(BaseModel):
+    token: str

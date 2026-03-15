@@ -4,12 +4,22 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import PostDetails from './pages/PostDetails';
 import CleanData from './pages/CleanData';
+import Login from './pages/Login';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function Navbar() {
     const location = useLocation();
 
+    // Do not show navbar on login page
+    if (location.pathname === '/login') return null;
+
     // Helper to determine active link
     const isActive = (path: string) => location.pathname === path;
+
+    const handleLogout = () => {
+        localStorage.removeItem('admin_token');
+        window.location.href = '/login';
+    };
 
     return (
         <nav className="bg-white shadow">
@@ -40,6 +50,11 @@ function Navbar() {
                             </Link>
                         </div>
                     </div>
+                    <div className="flex items-center">
+                        <button onClick={handleLogout} className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
+                            Logout
+                        </button>
+                    </div>
                 </div>
             </div>
         </nav>
@@ -53,10 +68,13 @@ function App() {
                 <Navbar />
                 <main className="flex-1 w-full max-w-7xl mx-auto sm:px-6 lg:px-8 py-8 h-full">
                     <Routes>
-                        <Route path="/" element={<Home />} />
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/clean-data" element={<CleanData />} />
-                        <Route path="/posts/:id" element={<PostDetails />} />
+                        <Route path="/login" element={<Login />} />
+                        <Route element={<ProtectedRoute />}>
+                            <Route path="/" element={<Home />} />
+                            <Route path="/dashboard" element={<Dashboard />} />
+                            <Route path="/clean-data" element={<CleanData />} />
+                            <Route path="/posts/:id" element={<PostDetails />} />
+                        </Route>
                     </Routes>
                 </main>
             </div>
