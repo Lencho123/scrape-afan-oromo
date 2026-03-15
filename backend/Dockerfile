@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
+    libenchant-2-2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -16,4 +17,4 @@ RUN playwright install --with-deps chromium
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000" , "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
