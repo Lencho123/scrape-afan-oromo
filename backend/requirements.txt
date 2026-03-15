@@ -9,5 +9,5 @@ python-multipart
 emoji
 starlette
 nltk
-
+pyenchant>=3.3.0
 nltk==3.9.3
